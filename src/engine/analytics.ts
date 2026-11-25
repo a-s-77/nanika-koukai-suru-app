@@ -6,13 +6,23 @@ declare global {
 }
 
 const GA_ID_REGEX = /^G-[A-Z0-9]{6,20}$/i;
-const PLACEHOLDER_REGEX = /^G-X+$/i;
+const GTM_ID_REGEX = /^GTM-[A-Z0-9]{5,20}$/i;
+const PLACEHOLDER_REGEX = /^(G|GTM)-X+$/i;
 
 export function getGaMeasurementId(envId?: string): string | null {
   const raw = envId !== undefined ? envId : import.meta.env.VITE_GA_MEASUREMENT_ID;
   if (typeof raw !== 'string') return null;
   const trimmed = raw.trim().toUpperCase();
   if (!GA_ID_REGEX.test(trimmed) || PLACEHOLDER_REGEX.test(trimmed)) {
+    return null;
+  }
+  return trimmed;
+}
+
+export function getGtmContainerId(envId?: string): string | null {
+  if (typeof envId !== 'string') return null;
+  const trimmed = envId.trim().toUpperCase();
+  if (!GTM_ID_REGEX.test(trimmed) || PLACEHOLDER_REGEX.test(trimmed)) {
     return null;
   }
   return trimmed;
@@ -35,8 +45,10 @@ export function initAnalytics(measurementId?: string | null): boolean {
   }
 
   window.dataLayer = window.dataLayer || [];
-  window.gtag = function gtag(...args: unknown[]) {
-    window.dataLayer?.push(args);
+  window.gtag = function gtag() {
+    // gtag.js expects the native Arguments object in dataLayer rather than a plain Array
+    // eslint-disable-next-line prefer-rest-params
+    window.dataLayer?.push(arguments);
   };
 
   window.gtag('js', new Date());

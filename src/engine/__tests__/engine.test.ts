@@ -10,7 +10,7 @@ import {
   resampleStroke,
 } from '../shareCodec';
 import { computeCompatibility } from '../compatibility';
-import { getGaMeasurementId, initAnalytics, trackEvent } from '../analytics';
+import { getGaMeasurementId, getGtmContainerId, initAnalytics, trackEvent } from '../analytics';
 
 function makeBaseTelemetry(overrides: Partial<RawTelemetry> = {}): RawTelemetry {
   return {
@@ -465,11 +465,16 @@ describe('shareCodec & compatibility', () => {
 });
 
 describe('analytics', () => {
-  it('validates GA4 measurement IDs cleanly and degrades safely when unconfigured', () => {
+  it('validates GA4 and GTM IDs cleanly and degrades safely when unconfigured', () => {
     expect(getGaMeasurementId(' g-abc1234567 ')).toBe('G-ABC1234567');
+    expect(getGaMeasurementId('G-LNHB4N1LB1')).toBe('G-LNHB4N1LB1');
     expect(getGaMeasurementId('G-XXXXXXXXXX')).toBeNull();
     expect(getGaMeasurementId('')).toBeNull();
     expect(getGaMeasurementId('UA-12345-1')).toBeNull();
+
+    expect(getGtmContainerId('gtm-t9hpklhv')).toBe('GTM-T9HPKLHV');
+    expect(getGtmContainerId('GTM-XXXXXX')).toBeNull();
+    expect(getGtmContainerId('')).toBeNull();
 
     expect(initAnalytics(null)).toBe(false);
     expect(() => trackEvent('scan_start', { mode: 'daily' })).not.toThrow();
