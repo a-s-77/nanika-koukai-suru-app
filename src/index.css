@@ -1,0 +1,177 @@
+@import "tailwindcss";
+
+@theme {
+  --color-paper: #f4f2ec;
+  --color-paper-alt: #ebe7dc;
+  --color-ink: #141413;
+  --color-ink-muted: #57534e;
+  --color-vermilion: #ff3b1f;
+  --color-cobalt: #1d4ed8;
+  --color-chartreuse: #c6f600;
+  --color-obsidian: #111110;
+  --font-display: "Space Grotesk", "Noto Sans JP", system-ui, sans-serif;
+  --font-sans: "Noto Sans JP", "Space Grotesk", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+@layer base {
+  html,
+  body {
+    background-color: #f4f2ec;
+    color: #141413;
+    font-family: var(--font-sans);
+    overflow-x: hidden;
+  }
+}
+
+.bg-lab-grid {
+  background-color: #f4f2ec;
+  background-image: radial-gradient(rgba(20, 20, 19, 0.14) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.bg-obsidian-grid {
+  background-color: #111110;
+  background-image: radial-gradient(rgba(244, 242, 236, 0.1) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.font-mono-num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+.swiss-card {
+  background-color: #f4f2ec;
+  border: 1.5px solid #141413;
+  box-shadow: 4px 4px 0px #141413;
+}
+
+.swiss-card-sm {
+  background-color: #ffffff;
+  border: 1.5px solid #141413;
+  box-shadow: 3px 3px 0px #141413;
+}
+
+.swiss-btn {
+  border: 1.5px solid #141413;
+  box-shadow: 3px 3px 0px #141413;
+  transition: transform 100ms ease, box-shadow 100ms ease, background-color 140ms ease;
+}
+
+.swiss-btn:hover:not(:disabled) {
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0px #141413;
+}
+
+.swiss-btn:active:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0px #141413;
+}
+
+@keyframes shutter-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(0.985);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes scanline-sweep {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(500%);
+  }
+}
+
+@keyframes button-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 14px 32px rgba(255, 59, 31, 0.35), 0 0 0 0 rgba(255, 59, 31, 0.45);
+  }
+  50% {
+    transform: scale(1.045);
+    box-shadow: 0 18px 42px rgba(255, 59, 31, 0.52), 0 0 0 16px rgba(255, 59, 31, 0);
+  }
+}
+
+@keyframes shockwave-shake {
+  0%,
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  15% {
+    transform: translate(-7px, 4px) rotate(-0.8deg);
+  }
+  30% {
+    transform: translate(7px, -5px) rotate(0.8deg);
+  }
+  45% {
+    transform: translate(-5px, -3px) rotate(-0.5deg);
+  }
+  60% {
+    transform: translate(5px, 3px) rotate(0.4deg);
+  }
+  75% {
+    transform: translate(-3px, 2px) rotate(-0.2deg);
+  }
+}
+
+.animate-shutter {
+  animation: shutter-pulse 0.8s ease-in-out infinite;
+}
+
+.animate-scanline {
+  animation: scanline-sweep 2.4s linear infinite;
+}
+
+.animate-button-breathe {
+  animation: button-breathe 1.15s ease-in-out infinite;
+}
+
+.animate-shockwave {
+  animation: shockwave-shake 0.42s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+/* Custom hairline range slider for Crooked Frame */
+input[type="range"].swiss-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 10px;
+  background: #ebe7dc;
+  border: 1.5px solid #141413;
+  border-radius: 9999px;
+}
+
+input[type="range"].swiss-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 9999px;
+  background: #ff3b1f;
+  border: 2px solid #141413;
+  cursor: grab;
+  box-shadow: 2px 2px 0px #141413;
+}
+
+input[type="range"].swiss-slider::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  border-radius: 9999px;
+  background: #ff3b1f;
+  border: 2px solid #141413;
+  cursor: grab;
+  box-shadow: 2px 2px 0px #141413;
+}

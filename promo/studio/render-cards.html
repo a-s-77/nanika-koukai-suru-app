@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <title>MINDPRINT Card Studio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700;800&family=Noto+Sans+JP:wght@500;700;900&family=Space+Grotesk:wght@700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        margin: 0;
+        background: #000;
+      }
+      canvas {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="c"></canvas>
+    <script>
+      function drawSigil(ctx, cx, cy, R, opts = {}) {
+        const isDark = opts.dark !== false;
+        const inkMuted = isDark ? 'rgba(244,242,236,0.18)' : 'rgba(20,20,19,0.16)';
+        const inkFaint = isDark ? 'rgba(244,242,236,0.08)' : 'rgba(20,20,19,0.07)';
+
+        ctx.save();
+        for (const frac of [0.34, 0.62, 0.88, 1.0]) {
+          ctx.beginPath();
+          ctx.arc(cx, cy, R * frac, 0, Math.PI * 2);
+          ctx.strokeStyle = inkFaint;
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+        for (let i = 0; i < 48; i++) {
+          const a = (i / 48) * Math.PI * 2;
+          const inner = i % 4 === 0 ? R * 0.92 : R * 0.96;
+          ctx.beginPath();
+          ctx.moveTo(cx + Math.cos(a) * inner, cy + Math.sin(a) * inner);
+          ctx.lineTo(cx + Math.cos(a) * R * 1.03, cy + Math.sin(a) * R * 1.03);
+          ctx.strokeStyle = i % 12 === 0 ? inkMuted : inkFaint;
+          ctx.lineWidth = i % 12 === 0 ? 2.4 : 1.2;
+          ctx.stroke();
+        }
+
+        // Outer Chrono Drift Arc
+        ctx.beginPath();
+        ctx.arc(cx, cy, R * 0.96, -Math.PI * 0.45, Math.PI * 0.68);
+        ctx.strokeStyle = '#FF3B1F';
+        ctx.lineWidth = 8;
+        ctx.lineCap = 'round';
+        ctx.stroke();
+
+        // Secondary Chrono Arc
+        ctx.beginPath();
+        ctx.arc(cx, cy, R * 0.96, Math.PI * 0.88, Math.PI * 1.38);
+        ctx.strokeStyle = '#1D4ED8';
+        ctx.lineWidth = 6;
+        ctx.stroke();
+
+        // Synesthesia Fourier Blobs
+        function blob(baseR, lobes, ampRatio, color, fillAlpha, phase) {
+          ctx.beginPath();
+          for (let i = 0; i <= 160; i++) {
+            const th = (i / 160) * Math.PI * 2;
+            const h1 = Math.sin(th * lobes + phase);
+            const h2 = Math.cos(th * (lobes + 2) - phase * 0.7) * 0.4;
+            const r = baseR + baseR * ampRatio * (h1 * 0.72 + h2 * 0.28);
+            const x = cx + Math.cos(th) * r;
+            const y = cy + Math.sin(th) * r;
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          }
+          ctx.closePath();
+          ctx.fillStyle = color.replace('ALPHA', String(fillAlpha));
+          ctx.fill();
+          ctx.lineWidth = 3.5;
+          ctx.strokeStyle = color.replace('ALPHA', '0.9');
+          ctx.stroke();
+        }
+
+        blob(R * 0.64, 5, 0.16, 'rgba(255,59,31,ALPHA)', 0.16, 0.5);
+        blob(R * 0.52, 9, 0.22, 'rgba(56,189,248,ALPHA)', 0.14, 2.0);
+
+        // Risk Brink Halo + Overload Ticks
+        const riskR = R * 0.78;
+        ctx.beginPath();
+        ctx.arc(cx, cy, riskR, 0, Math.PI * 2);
+        ctx.strokeStyle = isDark ? 'rgba(198,246,0,0.88)' : '#141413';
+        ctx.lineWidth = 2.6;
+        ctx.setLineDash([12, 8]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Breach Slash
+        ctx.beginPath();
+        ctx.moveTo(cx - R * 0.68, cy + R * 0.68);
+        ctx.lineTo(cx + R * 0.68, cy - R * 0.68);
+        ctx.strokeStyle = 'rgba(255,59,31,0.82)';
+        ctx.lineWidth = 4;
+        ctx.stroke();
+
+        // Sanctuary 1-Stroke path dead center
+        const stroke = [
+          [0.24, 0.53],
+          [0.29, 0.31],
+          [0.48, 0.22],
+          [0.71, 0.30],
+          [0.76, 0.51],
+          [0.65, 0.71],
+          [0.42, 0.75],
+          [0.27, 0.61],
+          [0.36, 0.41],
+          [0.57, 0.45],
+        ];
+        const sScale = R * 1.15;
+        const pts = stroke.map(([x, y]) => ({
+          x: cx + (x - 0.5) * sScale,
+          y: cy + (y - 0.5) * sScale,
+        }));
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.lineWidth = 9;
+        ctx.strokeStyle = isDark ? '#F4F2EC' : '#141413';
+        if (isDark) {
+          ctx.shadowColor = 'rgba(198,246,0,0.45)';
+          ctx.shadowBlur = 18;
+        }
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (let i = 1; i < pts.length - 1; i++) {
+          const mx = (pts[i].x + pts[i + 1].x) / 2;
+          const my = (pts[i].y + pts[i + 1].y) / 2;
+          ctx.quadraticCurveTo(pts[i].x, pts[i].y, mx, my);
+        }
+        ctx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+
+        ctx.fillStyle = '#FF3B1F';
+        ctx.beginPath();
+        ctx.arc(pts[0].x, pts[0].y, 9, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = isDark ? '#C6F600' : '#1D4ED8';
+        ctx.beginPath();
+        ctx.arc(pts[pts.length - 1].x, pts[pts.length - 1].y, 9, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      window.__renderThumb = async () => {
+        await document.fonts.ready;
+        const canvas = document.getElementById('c');
+        const W = 1280;
+        const H = 720;
+        canvas.width = W;
+        canvas.height = H;
+        const ctx = canvas.getContext('2d');
+
+        // Deep Obsidian base + radial vermilion glow
+        ctx.fillStyle = '#111110';
+        ctx.fillRect(0, 0, W, H);
+
+        const glow = ctx.createRadialGradient(930, 360, 40, 930, 360, 460);
+        glow.addColorStop(0, 'rgba(255,59,31,0.34)');
+        glow.addColorStop(0.55, 'rgba(29,78,216,0.16)');
+        glow.addColorStop(1, 'rgba(17,17,16,0)');
+        ctx.fillStyle = glow;
+        ctx.fillRect(0, 0, W, H);
+
+        // Lab Dot Grid
+        ctx.fillStyle = 'rgba(244,242,236,0.10)';
+        for (let x = 24; x < W; x += 28) {
+          for (let y = 24; y < H; y += 28) {
+            ctx.fillRect(x, y, 2, 2);
+          }
+        }
+
+        // Bold Outer Frame
+        ctx.strokeStyle = 'rgba(244,242,236,0.22)';
+        ctx.lineWidth = 4;
+        ctx.strokeRect(22, 22, W - 44, H - 44);
+
+        // Left Typography Block
+        // Pill badge
+        ctx.fillStyle = '#C6F600';
+        ctx.fillRect(62, 62, 340, 46);
+        ctx.strokeStyle = '#141413';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(62, 62, 340, 46);
+        ctx.fillStyle = '#141413';
+        ctx.font = '800 23px "Noto Sans JP", "Space Grotesk", sans-serif';
+        ctx.fillText('無料Webアプリ // 登録不要', 82, 93);
+
+        // Huge High-CTR Japanese Headline
+        ctx.fillStyle = '#FF3B1F';
+        ctx.font = '900 108px "Noto Sans JP", sans-serif';
+        ctx.fillText('質問ゼロ。', 56, 232);
+
+        ctx.fillStyle = '#F4F2EC';
+        ctx.font = '900 84px "Noto Sans JP", sans-serif';
+        ctx.fillText('60秒で', 56, 338);
+        ctx.fillText('無意識バレる', 56, 434);
+
+        // Evidence "Caught in 4K" Badge
+        ctx.fillStyle = '#1A1A18';
+        ctx.fillRect(62, 480, 628, 118);
+        ctx.strokeStyle = '#FF3B1F';
+        ctx.lineWidth = 4;
+        ctx.strokeRect(62, 480, 628, 118);
+        ctx.fillStyle = '#FF3B1F';
+        ctx.fillRect(62, 480, 14, 118);
+
+        ctx.fillStyle = '#FF3B1F';
+        ctx.font = '700 21px "JetBrains Mono", monospace';
+        ctx.fillText('CAUGHT IN 4K // TELEMETRY LOG', 94, 518);
+
+        ctx.fillStyle = '#F4F2EC';
+        ctx.font = '900 34px "Noto Sans JP", "JetBrains Mono", sans-serif';
+        ctx.fillText('禁止ボタン最接近 14px / 陥落 1.8s', 94, 572);
+
+        // Footer Brand
+        ctx.fillStyle = 'rgba(244,242,236,0.7)';
+        ctx.font = '700 26px "Space Grotesk", "JetBrains Mono", sans-serif';
+        ctx.fillText('MINDPRINT // 行動指紋スキャン', 62, 658);
+
+        // Right Side: Giant Glowing Sigil + 92% Sync Stamp
+        drawSigil(ctx, 975, 365, 245, { dark: true });
+
+        // Top-right SYNC pill
+        ctx.save();
+        ctx.translate(1018, 66);
+        ctx.rotate(-0.04);
+        ctx.fillStyle = '#FF3B1F';
+        ctx.fillRect(0, 0, 206, 62);
+        ctx.strokeStyle = '#F4F2EC';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(0, 0, 206, 62);
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = '900 32px "JetBrains Mono", "Space Grotesk", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('SYNC 92%', 103, 42);
+        ctx.textAlign = 'left';
+        ctx.restore();
+      };
+
+      window.__renderOgp = async () => {
+        await document.fonts.ready;
+        const canvas = document.getElementById('c');
+        const W = 1200;
+        const H = 630;
+        canvas.width = W;
+        canvas.height = H;
+        const ctx = canvas.getContext('2d');
+
+        // Paper Swiss Canvas
+        ctx.fillStyle = '#F4F2EC';
+        ctx.fillRect(0, 0, W, H);
+
+        ctx.fillStyle = 'rgba(20,20,19,0.13)';
+        for (let x = 24; x < W; x += 26) {
+          for (let y = 24; y < H; y += 26) {
+            ctx.fillRect(x, y, 1.8, 1.8);
+          }
+        }
+
+        // Card container
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(36, 36, W - 72, H - 72);
+        ctx.strokeStyle = '#141413';
+        ctx.lineWidth = 4;
+        ctx.strokeRect(36, 36, W - 72, H - 72);
+
+        // Top Lab bar
+        ctx.fillStyle = '#141413';
+        ctx.fillRect(36, 36, W - 72, 54);
+        ctx.fillStyle = '#F4F2EC';
+        ctx.font = '700 20px "JetBrains Mono", monospace';
+        ctx.fillText('MINDPRINT LAB // ZERO-QUESTION BEHAVIORAL OS SCAN', 64, 71);
+        ctx.textAlign = 'right';
+        ctx.fillStyle = '#C6F600';
+        ctx.fillText('60 SEC // OPEN SOURCE', W - 64, 71);
+        ctx.textAlign = 'left';
+
+        // Left Text
+        ctx.fillStyle = '#C6F600';
+        ctx.fillRect(72, 126, 260, 34);
+        ctx.strokeStyle = '#141413';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(72, 126, 260, 34);
+        ctx.fillStyle = '#141413';
+        ctx.font = '700 16px "JetBrains Mono", sans-serif';
+        ctx.fillText('PSYCHOPHYSICS ENGINE', 88, 149);
+
+        ctx.fillStyle = '#FF3B1F';
+        ctx.font = '900 72px "Noto Sans JP", "Space Grotesk", sans-serif';
+        ctx.fillText('質問ゼロ。', 68, 240);
+
+        ctx.fillStyle = '#141413';
+        ctx.font = '900 54px "Noto Sans JP", "Space Grotesk", sans-serif';
+        ctx.fillText('行動指紋スキャン', 68, 314);
+
+        ctx.fillStyle = '#57534E';
+        ctx.font = '700 24px "Noto Sans JP", sans-serif';
+        ctx.fillText('「言葉は嘘をつく。0.1秒の迷いは嘘をつかない。」', 72, 376);
+
+        // 6 protocols strip
+        const mods = ['01 体内時計', '02 禁断ボタン', '03 傾いた額縁', '04 1本線聖域', '05 欲望臨界', '06 共感覚'];
+        mods.forEach((m, idx) => {
+          const col = idx % 3;
+          const row = Math.floor(idx / 3);
+          const bx = 72 + col * 198;
+          const by = 424 + row * 54;
+          ctx.fillStyle = '#F4F2EC';
+          ctx.fillRect(bx, by, 184, 42);
+          ctx.strokeStyle = '#141413';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(bx, by, 184, 42);
+          ctx.fillStyle = '#141413';
+          ctx.font = '700 17px "Noto Sans JP", "JetBrains Mono", sans-serif';
+          ctx.fillText(m, bx + 14, by + 27);
+        });
+
+        // Right Sigil Showcase
+        ctx.fillStyle = '#111110';
+        ctx.fillRect(720, 122, 412, 434);
+        ctx.strokeStyle = '#141413';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(720, 122, 412, 434);
+        drawSigil(ctx, 926, 326, 165, { dark: true });
+
+        ctx.fillStyle = '#C6F600';
+        ctx.font = '700 15px "JetBrains Mono", monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('SPECIMEN SIGIL + URL BRAINWAVE SYNC', 926, 534);
+        ctx.textAlign = 'left';
+      };
+    </script>
+  </body>
+</html>

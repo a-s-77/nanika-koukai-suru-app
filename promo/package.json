@@ -1,0 +1,10 @@
+{
+  "name": "mindprint-promo-studio",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "ffmpeg-static": "^5.2.0",
+    "playwright-core": "^1.52.0"
+  }
+}

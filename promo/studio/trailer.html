@@ -1,0 +1,807 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <title>MINDPRINT PR Trailer Studio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700;800&family=Noto+Sans+JP:wght@500;700;900&family=Space+Grotesk:wght@700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        margin: 0;
+        background: #000;
+        overflow: hidden;
+      }
+      canvas {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="stage"></canvas>
+    <script>
+      const IMAGES = {};
+
+      function loadImage(key, src) {
+        return new Promise((resolve) => {
+          const img = new Image();
+          img.onload = () => {
+            IMAGES[key] = img;
+            resolve(img);
+          };
+          img.onerror = () => resolve(null);
+          img.src = src;
+        });
+      }
+
+      function easeOutCubic(x) {
+        const t = Math.max(0, Math.min(1, x));
+        return 1 - Math.pow(1 - t, 3);
+      }
+
+      function easeInOutCubic(x) {
+        const t = Math.max(0, Math.min(1, x));
+        return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+      }
+
+      function clamp(v, a, b) {
+        return Math.max(a, Math.min(b, v));
+      }
+
+      function drawDotGrid(ctx, W, H, dark, offsetX = 0, offsetY = 0) {
+        ctx.fillStyle = dark ? '#111110' : '#F4F2EC';
+        ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = dark ? 'rgba(244,242,236,0.09)' : 'rgba(20,20,19,0.12)';
+        const step = 32;
+        const ox = ((offsetX % step) + step) % step;
+        const oy = ((offsetY % step) + step) % step;
+        for (let x = ox; x < W; x += step) {
+          for (let y = oy; y < H; y += step) {
+            ctx.fillRect(x, y, 2, 2);
+          }
+        }
+      }
+
+      function drawProceduralSigil(ctx, cx, cy, R, timeSec, opts = {}) {
+        const dark = opts.dark !== false;
+        const seedPhase = opts.seedPhase || 0;
+        const inkMuted = dark ? 'rgba(244,242,236,0.18)' : 'rgba(20,20,19,0.16)';
+        const inkFaint = dark ? 'rgba(244,242,236,0.08)' : 'rgba(20,20,19,0.07)';
+
+        ctx.save();
+        for (const frac of [0.35, 0.62, 0.88, 1.0]) {
+          ctx.beginPath();
+          ctx.arc(cx, cy, R * frac, 0, Math.PI * 2);
+          ctx.strokeStyle = inkFaint;
+          ctx.lineWidth = 1.8;
+          ctx.stroke();
+        }
+
+        // Chrono arc
+        ctx.beginPath();
+        ctx.arc(
+          cx,
+          cy,
+          R * 0.96,
+          -Math.PI * 0.4 + timeSec * 0.25 + seedPhase,
+          Math.PI * 0.7 + timeSec * 0.25 + seedPhase,
+        );
+        ctx.strokeStyle = opts.primaryColor || '#FF3B1F';
+        ctx.lineWidth = Math.max(3, R * 0.032);
+        ctx.lineCap = 'round';
+        ctx.stroke();
+
+        // Blobs
+        function blob(baseR, lobes, ampRatio, color, fillAlpha, speed) {
+          ctx.beginPath();
+          for (let i = 0; i <= 120; i++) {
+            const th = (i / 120) * Math.PI * 2;
+            const h1 = Math.sin(th * lobes + timeSec * speed + seedPhase);
+            const h2 = Math.cos(th * (lobes + 2) - timeSec * speed * 0.7) * 0.4;
+            const r = baseR + baseR * ampRatio * (h1 * 0.72 + h2 * 0.28);
+            const x = cx + Math.cos(th) * r;
+            const y = cy + Math.sin(th) * r;
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          }
+          ctx.closePath();
+          ctx.fillStyle = color.replace('ALPHA', String(fillAlpha));
+          ctx.fill();
+          ctx.lineWidth = 2.6;
+          ctx.strokeStyle = color.replace('ALPHA', '0.88');
+          ctx.stroke();
+        }
+
+        blob(R * 0.65, 5, 0.16, 'rgba(255,59,31,ALPHA)', 0.15, 1.3);
+        blob(R * 0.51, 9, 0.21, 'rgba(56,189,248,ALPHA)', 0.13, -1.0);
+
+        // Risk halo
+        ctx.beginPath();
+        ctx.arc(cx, cy, R * 0.77, 0, Math.PI * 2);
+        ctx.strokeStyle = dark ? 'rgba(198,246,0,0.82)' : inkMuted;
+        ctx.lineWidth = 2.2;
+        ctx.setLineDash([10, 7]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Sanctuary stroke center
+        const stroke = opts.altStroke
+          ? [
+              [0.26, 0.35],
+              [0.52, 0.24],
+              [0.75, 0.38],
+              [0.68, 0.68],
+              [0.44, 0.74],
+              [0.25, 0.58],
+              [0.36, 0.38],
+            ]
+          : [
+              [0.24, 0.53],
+              [0.29, 0.31],
+              [0.48, 0.22],
+              [0.71, 0.30],
+              [0.76, 0.51],
+              [0.65, 0.71],
+              [0.42, 0.75],
+              [0.27, 0.61],
+              [0.36, 0.41],
+              [0.57, 0.45],
+            ];
+        const sScale = R * 1.12;
+        const pts = stroke.map(([x, y]) => ({
+          x: cx + (x - 0.5) * sScale,
+          y: cy + (y - 0.5) * sScale,
+        }));
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.lineWidth = Math.max(4, R * 0.036);
+        ctx.strokeStyle = dark ? '#F4F2EC' : '#141413';
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (let i = 1; i < pts.length - 1; i++) {
+          const mx = (pts[i].x + pts[i + 1].x) / 2;
+          const my = (pts[i].y + pts[i + 1].y) / 2;
+          ctx.quadraticCurveTo(pts[i].x, pts[i].y, mx, my);
+        }
+        ctx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
+        ctx.stroke();
+
+        ctx.fillStyle = '#FF3B1F';
+        ctx.beginPath();
+        ctx.arc(pts[0].x, pts[0].y, Math.max(4, R * 0.035), 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = dark ? '#C6F600' : '#1D4ED8';
+        ctx.beginPath();
+        ctx.arc(pts[pts.length - 1].x, pts[pts.length - 1].y, Math.max(4, R * 0.035), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      function drawDeviceMockup(ctx, img, x, y, w, h, options = {}) {
+        if (!img) return;
+        const radius = options.radius ?? 16;
+        const zoom = options.zoom ?? 1;
+        const darkFrame = options.darkFrame !== false;
+
+        ctx.save();
+        // Swiss Drop Shadow
+        ctx.fillStyle = options.shadowColor || '#FF3B1F';
+        ctx.beginPath();
+        ctx.roundRect(x + 12, y + 12, w, h, radius);
+        ctx.fill();
+
+        // Outer Frame
+        ctx.fillStyle = darkFrame ? '#141413' : '#FFFFFF';
+        ctx.beginPath();
+        ctx.roundRect(x, y, w, h, radius);
+        ctx.fill();
+        ctx.strokeStyle = options.borderColor || '#F4F2EC';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        // Top Window Bar
+        const barH = 34;
+        ctx.fillStyle = '#1D1D1B';
+        ctx.beginPath();
+        ctx.roundRect(x + 2, y + 2, w - 4, barH, [radius - 2, radius - 2, 0, 0]);
+        ctx.fill();
+
+        ['#FF3B1F', '#C6F600', '#1D4ED8'].forEach((c, idx) => {
+          ctx.fillStyle = c;
+          ctx.beginPath();
+          ctx.arc(x + 22 + idx * 18, y + 19, 5, 0, Math.PI * 2);
+          ctx.fill();
+        });
+
+        ctx.fillStyle = 'rgba(244,242,236,0.6)';
+        ctx.font = '700 12px "JetBrains Mono", monospace';
+        ctx.fillText(options.title || 'MINDPRINT // LIVE TELEMETRY', x + 82, y + 23);
+
+        // Clip image viewport
+        const ix = x + 4;
+        const iy = y + barH + 2;
+        const iw = w - 8;
+        const ih = h - barH - 6;
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.roundRect(ix, iy, iw, ih, [0, 0, radius - 4, radius - 4]);
+        ctx.clip();
+
+        // Cover-crop with optional zoom
+        const imgAspect = img.width / img.height;
+        const boxAspect = iw / ih;
+        let dw, dh;
+        if (imgAspect > boxAspect) {
+          dh = ih * zoom;
+          dw = dh * imgAspect;
+        } else {
+          dw = iw * zoom;
+          dh = dw / imgAspect;
+        }
+        const dx = ix + (iw - dw) / 2;
+        const dy = iy + (options.topAlign ? 0 : (ih - dh) / 2);
+        ctx.drawImage(img, dx, dy, dw, dh);
+        ctx.restore();
+
+        ctx.restore();
+      }
+
+      function drawHudCallout(ctx, x, y, code, headline, sub, accent = '#FF3B1F') {
+        ctx.save();
+        ctx.fillStyle = '#111110';
+        ctx.fillRect(x, y, 464, 128);
+        ctx.strokeStyle = accent;
+        ctx.lineWidth = 3;
+        ctx.strokeRect(x, y, 464, 128);
+        ctx.fillStyle = accent;
+        ctx.fillRect(x, y, 10, 128);
+
+        ctx.fillStyle = accent;
+        ctx.font = '700 16px "JetBrains Mono", monospace';
+        ctx.fillText(code, x + 26, y + 34);
+
+        ctx.fillStyle = '#F4F2EC';
+        ctx.font = '900 27px "Noto Sans JP", "Space Grotesk", sans-serif';
+        ctx.fillText(headline, x + 26, y + 74);
+
+        ctx.fillStyle = '#A8A29E';
+        ctx.font = '700 17px "Noto Sans JP", "JetBrains Mono", sans-serif';
+        ctx.fillText(sub, x + 26, y + 108);
+        ctx.restore();
+      }
+
+      function renderYouTubeFrame(ctx, W, H, t) {
+        // Scene 1: 0.0 - 4.2s Provocative Hook
+        if (t < 4.2) {
+          const p = t / 4.2;
+          drawDotGrid(ctx, W, H, true, t * 25, t * 14);
+
+          // Pulse ring synced to intro heartbeat
+          const beat = Math.abs(Math.sin(t * Math.PI * 2.1));
+          ctx.beginPath();
+          ctx.arc(W / 2, H / 2, 220 + beat * 95, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(255,59,31,${0.12 + beat * 0.25})`;
+          ctx.lineWidth = 3;
+          ctx.stroke();
+
+          ctx.textAlign = 'center';
+          if (t < 1.9) {
+            const ep = easeOutCubic(t / 0.45);
+            ctx.globalAlpha = ep;
+            ctx.fillStyle = '#A8A29E';
+            ctx.font = '700 32px "JetBrains Mono", sans-serif';
+            ctx.fillText('PERSONALITY QUIZ CHECK // 00', W / 2, H / 2 - 110);
+
+            ctx.fillStyle = '#F4F2EC';
+            ctx.font = '900 84px "Noto Sans JP", sans-serif';
+            ctx.fillText('言葉は、嘘をつく。', W / 2, H / 2 + 12);
+          } else {
+            const ep = easeOutCubic((t - 1.9) / 0.4);
+            ctx.globalAlpha = ep;
+            ctx.fillStyle = '#FF3B1F';
+            ctx.font = '700 28px "JetBrains Mono", sans-serif';
+            ctx.fillText('PSYCHOPHYSICS TELEMETRY // 0.1s LATENCY', W / 2, H / 2 - 110);
+
+            ctx.fillStyle = '#C6F600';
+            ctx.font = '900 88px "Noto Sans JP", sans-serif';
+            ctx.fillText('0.1秒の迷いは嘘をつかない。', W / 2, H / 2 + 14);
+          }
+          ctx.globalAlpha = 1;
+          ctx.textAlign = 'left';
+
+          // Bottom sweep bar
+          ctx.fillStyle = '#FF3B1F';
+          ctx.fillRect(0, H - 10, W * p, 10);
+          return;
+        }
+
+        // Scene 2: 4.2 - 8.2s MINDPRINT Title + Live Landing + Sigil
+        if (t < 8.2) {
+          const lt = t - 4.2;
+          const enter = easeOutCubic(lt / 0.55);
+          drawDotGrid(ctx, W, H, false, -t * 18, 0);
+
+          // Top Brand Bar
+          ctx.fillStyle = '#141413';
+          ctx.fillRect(0, 0, W, 72);
+          ctx.fillStyle = '#F4F2EC';
+          ctx.font = '700 24px "JetBrains Mono", monospace';
+          ctx.fillText('MINDPRINT LAB // ZERO-QUESTION BEHAVIORAL OS SCAN', 48, 45);
+          ctx.textAlign = 'right';
+          ctx.fillStyle = '#C6F600';
+          ctx.fillText('60 SEC // ZERO SIGNUP', W - 48, 45);
+          ctx.textAlign = 'left';
+
+          // Left Title Column
+          const lx = 52 - (1 - enter) * 60;
+          ctx.fillStyle = '#C6F600';
+          ctx.fillRect(lx, 130, 340, 44);
+          ctx.strokeStyle = '#141413';
+          ctx.lineWidth = 2.5;
+          ctx.strokeRect(lx, 130, 340, 44);
+          ctx.fillStyle = '#141413';
+          ctx.font = '700 19px "JetBrains Mono", sans-serif';
+          ctx.fillText('NO SURVEYS. JUST RAW SIGNALS.', lx + 14, 159);
+
+          ctx.fillStyle = '#FF3B1F';
+          ctx.font = '900 100px "Space Grotesk", sans-serif';
+          ctx.fillText('MINDPRINT', lx, 286);
+
+          ctx.fillStyle = '#141413';
+          ctx.font = '900 42px "Noto Sans JP", sans-serif';
+          ctx.fillText('質問ゼロの行動指紋スキャン', lx, 354);
+
+          // Live rotating sigil bottom-left
+          drawProceduralSigil(ctx, lx + 210, 650, 175, t, { dark: false });
+          ctx.fillStyle = '#141413';
+          ctx.font = '700 20px "JetBrains Mono", sans-serif';
+          ctx.fillText('GENERATIVE MINDPRINT SIGIL', lx + 42, 878);
+
+          // Right Real Landing Screenshot
+          const rx = 710 + (1 - enter) * 90;
+          drawDeviceMockup(ctx, IMAGES.landing, rx, 136, 1140, 820, {
+            title: 'a-s-77.github.io/nanika-koukai-suru-app',
+            zoom: 1.02 + lt * 0.015,
+            topAlign: true,
+            borderColor: '#141413',
+          });
+          return;
+        }
+
+        // Scene 3: 8.2 - 24.5s 6-Module Rapid-Fire Montage (~2.7s each)
+        if (t < 24.5) {
+          const mods = [
+            {
+              img: IMAGES.chrono,
+              code: 'PROTOCOL 01 / 06 // BLIND CHRONO',
+              title: '体内時計の歪みを実測',
+              sub: '1.50sで数値消滅 // ダミー鼓動トラップ',
+              accent: '#1D4ED8',
+              url: 'MOD-01 // 5.00s BLIND STOP',
+            },
+            {
+              img: IMAGES.forbidden,
+              code: 'PROTOCOL 02 / 06 // FORBIDDEN BUTTON',
+              title: '7秒間の誘惑とカーソル軌道',
+              sub: '未読99+煽り // 最接近ピクセルを監視',
+              accent: '#FF3B1F',
+              url: 'MOD-02 // DO NOT PRESS',
+            },
+            {
+              img: IMAGES.crooked,
+              code: 'PROTOCOL 03 / 06 // CROOKED FRAME',
+              title: '0.1°単位の完璧主義を暴く',
+              sub: '数値非表示 // 往復迷い回数をカウント',
+              accent: '#C6F600',
+              url: 'MOD-03 // HORIZON CALIBRATION',
+            },
+            {
+              img: IMAGES.freehand,
+              code: 'PROTOCOL 04 / 06 // 1-STROKE SANCTUARY',
+              title: '6秒の筆致ジオメトリ解析',
+              sub: '滑らかさ・閉鎖度・速度ムラを抽出',
+              accent: '#1D4ED8',
+              url: 'MOD-04 // FREEHAND STROKE',
+            },
+            {
+              img: IMAGES.greed,
+              code: 'PROTOCOL 05 / 06 // GREED HORIZON',
+              title: '爆発0.2秒前の度胸と震え',
+              sub: '長押しチャージ // 指先の微細震え計測',
+              accent: '#FF3B1F',
+              url: 'MOD-05 // OVERLOAD BRINK',
+            },
+            {
+              img: IMAGES.synesthesia,
+              code: 'PROTOCOL 06 / 06 // SYNESTHESIA TUNER',
+              title: '音×形状の無意識シンクロ',
+              sub: 'Web Audio合成音 // 2Dフーリエ造形',
+              accent: '#C6F600',
+              url: 'MOD-06 // ACOUSTIC MORPH',
+            },
+          ];
+
+          const segDur = (24.5 - 8.2) / 6;
+          const idx = Math.min(5, Math.floor((t - 8.2) / segDur));
+          const st = (t - 8.2) - idx * segDur;
+          const enter = easeOutCubic(st / 0.35);
+          const m = mods[idx];
+
+          // Reactor shake near 21.1s explosion cue!
+          const isShake = Math.abs(t - 21.15) < 0.35;
+          const sx = isShake ? Math.sin(t * 140) * 14 : 0;
+          const sy = isShake ? Math.cos(t * 120) * 10 : 0;
+
+          ctx.save();
+          ctx.translate(sx, sy);
+          drawDotGrid(ctx, W, H, true, t * 40, t * 20);
+
+          // Left big index number + HUD
+          ctx.fillStyle = 'rgba(244,242,236,0.06)';
+          ctx.font = '900 320px "Space Grotesk", sans-serif';
+          ctx.fillText(`0${idx + 1}`, 42, 340);
+
+          drawHudCallout(ctx, 56, 380 - (1 - enter) * 20, m.code, m.title, m.sub, m.accent);
+
+          // Progress bar across 6 protocols
+          for (let p = 0; p < 6; p++) {
+            ctx.fillStyle = p === idx ? '#FF3B1F' : p < idx ? '#C6F600' : 'rgba(244,242,236,0.18)';
+            ctx.fillRect(56 + p * 72, 540, 60, 12);
+          }
+
+          // Real Module Screenshot centered-right
+          const zoom = 1.0 + st * 0.03;
+          drawDeviceMockup(ctx, m.img, 564, 96, 1290, 888, {
+            title: m.url,
+            zoom,
+            shadowColor: m.accent,
+            topAlign: true,
+          });
+
+          // Flash on Forbidden Button orbit / Greed explosion
+          if (idx === 1) {
+            const cx = 1190 + Math.cos(st * 3.5) * 120;
+            const cy = 540 + Math.sin(st * 4.2) * 55;
+            ctx.strokeStyle = '#C6F600';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(cx, cy, 18, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.fillStyle = '#FF3B1F';
+            ctx.font = '700 16px "JetBrains Mono", monospace';
+            ctx.fillText(`DIST: ${Math.round(14 + Math.abs(Math.sin(st * 3)) * 24)}px`, cx + 24, cy + 5);
+          }
+
+          if (isShake && Math.abs(t - 21.1) < 0.12) {
+            ctx.fillStyle = 'rgba(255,59,31,0.35)';
+            ctx.fillRect(-20, -20, W + 40, H + 40);
+          }
+          ctx.restore();
+          return;
+        }
+
+        // Scene 4: 24.5 - 32.0s CAUGHT IN 4K + Spec Sheet Reveal
+        if (t < 32.0) {
+          const lt = t - 24.5;
+          const enter = easeOutCubic(lt / 0.55);
+          drawDotGrid(ctx, W, H, false, t * 14, 0);
+
+          ctx.fillStyle = '#FF3B1F';
+          ctx.fillRect(64, 58, 380, 48);
+          ctx.strokeStyle = '#141413';
+          ctx.lineWidth = 3;
+          ctx.strokeRect(64, 58, 380, 48);
+          ctx.fillStyle = '#FFFFFF';
+          ctx.font = '800 22px "JetBrains Mono", sans-serif';
+          ctx.fillText('CAUGHT IN 4K // RAW PROOF', 84, 90);
+
+          ctx.fillStyle = '#141413';
+          ctx.font = '900 58px "Noto Sans JP", sans-serif';
+          ctx.fillText('あなたの指先が残した「動かぬ証拠」', 64, 178);
+
+          // Left real results screenshot
+          drawDeviceMockup(ctx, IMAGES.resultsSpec, 64, 224 + (1 - enter) * 40, 1140, 790, {
+            title: 'MINDPRINT // SPECIMEN REPORT',
+            zoom: 1.02,
+            topAlign: true,
+            borderColor: '#141413',
+            shadowColor: '#141413',
+          });
+
+          // Right Obsidian Live Sigil Card + 1080x1350 PNG badge
+          ctx.fillStyle = '#111110';
+          ctx.fillRect(1254, 224, 600, 790);
+          ctx.strokeStyle = '#141413';
+          ctx.lineWidth = 4;
+          ctx.strokeRect(1254, 224, 600, 790);
+
+          drawProceduralSigil(ctx, 1554, 500, 210, t, { dark: true });
+
+          ctx.fillStyle = '#C6F600';
+          ctx.font = '700 20px "JetBrains Mono", monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText('16 ARCHETYPES // 1080×1350 PNG', 1554, 790);
+          ctx.fillStyle = '#F4F2EC';
+          ctx.font = '900 34px "Noto Sans JP", sans-serif';
+          ctx.fillText('SNSにそのまま貼れる', 1554, 854);
+          ctx.fillText('行動指紋スペックシート', 1554, 902);
+          ctx.textAlign = 'left';
+          return;
+        }
+
+        // Scene 5: 32.0 - 37.5s Friend Brainwave Sync (?c=...)
+        if (t < 37.5) {
+          const lt = t - 32.0;
+          const enter = easeOutCubic(lt / 0.5);
+          const syncDisplay = Math.round(easeOutCubic(clamp((lt - 0.6) / 1.8, 0, 1)) * 92);
+          drawDotGrid(ctx, W, H, true, -t * 30, 0);
+
+          ctx.fillStyle = '#1D4ED8';
+          ctx.fillRect(64, 58, 430, 48);
+          ctx.fillStyle = '#FFFFFF';
+          ctx.font = '800 21px "JetBrains Mono", sans-serif';
+          ctx.fillText('URL-ENCODED BRAINWAVE SYNC (?c=)', 84, 90);
+
+          ctx.fillStyle = '#F4F2EC';
+          ctx.font = '900 54px "Noto Sans JP", sans-serif';
+          ctx.fillText('URLを送るだけ。友だちとの脳波シンクロ率を測定', 64, 174);
+
+          // Left dual interlocking sigils box
+          ctx.fillStyle = '#181816';
+          ctx.fillRect(64, 224, 740, 560);
+          ctx.strokeStyle = '#FF3B1F';
+          ctx.lineWidth = 3;
+          ctx.strokeRect(64, 224, 740, 560);
+
+          // Interference waves
+          for (let w = 0; w < 3; w++) {
+            ctx.beginPath();
+            for (let s = 0; s <= 60; s++) {
+              const p = s / 60;
+              const x = 250 + p * 370;
+              const y = 440 + Math.sin(p * Math.PI * (4 + w * 2) + t * 5) * 32 * Math.sin(p * Math.PI);
+              if (s === 0) ctx.moveTo(x, y);
+              else ctx.lineTo(x, y);
+            }
+            ctx.strokeStyle = w === 0 ? '#FF3B1F' : w === 1 ? '#38BDF8' : '#C6F600';
+            ctx.lineWidth = 2.5;
+            ctx.stroke();
+          }
+
+          drawProceduralSigil(ctx, 250, 440, 145, t, { dark: true });
+          drawProceduralSigil(ctx, 620, 440, 145, -t * 0.9, { dark: true, altStroke: true, primaryColor: '#1D4ED8' });
+
+          ctx.fillStyle = '#C6F600';
+          ctx.font = '900 104px "Space Grotesk", "JetBrains Mono", sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(`${syncDisplay}%`, 434, 705);
+          ctx.fillStyle = '#F4F2EC';
+          ctx.font = '700 22px "JetBrains Mono", sans-serif';
+          ctx.fillText('SUBCONSCIOUS SYNC RATE // ZERO BACKEND', 434, 748);
+          ctx.textAlign = 'left';
+
+          // Right real Sync screenshot
+          drawDeviceMockup(ctx, IMAGES.resultsSync, 846, 224 + (1 - enter) * 40, 1010, 780, {
+            title: 'MINDPRINT // DUAL SYNC REPORT',
+            zoom: 1.03,
+            topAlign: true,
+            shadowColor: '#1D4ED8',
+          });
+          return;
+        }
+
+        // Scene 6: 37.5 - 42.0s Climax CTA
+        {
+          const lt = t - 37.5;
+          const enter = easeOutCubic(lt / 0.5);
+          drawDotGrid(ctx, W, H, true, 0, t * 20);
+
+          // Glowing center backdrop sigil
+          ctx.globalAlpha = 0.28;
+          drawProceduralSigil(ctx, W / 2, H / 2, 420, t, { dark: true });
+          ctx.globalAlpha = 1;
+
+          ctx.textAlign = 'center';
+          ctx.fillStyle = '#FF3B1F';
+          ctx.font = '900 124px "Space Grotesk", sans-serif';
+          ctx.fillText('MINDPRINT', W / 2, 340 - (1 - enter) * 20);
+
+          ctx.fillStyle = '#F4F2EC';
+          ctx.font = '900 58px "Noto Sans JP", sans-serif';
+          ctx.fillText('今すぐ、60秒で無意識をスキャンしよう。', W / 2, 444);
+
+          // URL Pill
+          ctx.fillStyle = '#C6F600';
+          ctx.fillRect(W / 2 - 470, 520, 940, 94);
+          ctx.strokeStyle = '#F4F2EC';
+          ctx.lineWidth = 4;
+          ctx.strokeRect(W / 2 - 470, 520, 940, 94);
+
+          ctx.fillStyle = '#141413';
+          ctx.font = '800 36px "JetBrains Mono", monospace';
+          ctx.fillText('a-s-77.github.io/nanika-koukai-suru-app', W / 2, 580);
+
+          ctx.fillStyle = '#A8A29E';
+          ctx.font = '700 24px "JetBrains Mono", "Noto Sans JP", sans-serif';
+          ctx.fillText('FREE // NO SIGNUP // OPEN SOURCE ON GITHUB // #MINDPRINT', W / 2, 686);
+          ctx.textAlign = 'left';
+        }
+      }
+
+      function renderShortsFrame(ctx, W, H, t) {
+        // 1080x1920 vertical high-impact cut (28s)
+        if (t < 3.2) {
+          drawDotGrid(ctx, W, H, true, 0, t * 30);
+          ctx.textAlign = 'center';
+          const beat = Math.abs(Math.sin(t * Math.PI * 2.5));
+          ctx.beginPath();
+          ctx.arc(W / 2, H / 2 - 80, 190 + beat * 80, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(255,59,31,0.35)';
+          ctx.lineWidth = 4;
+          ctx.stroke();
+
+          if (t < 1.55) {
+            ctx.fillStyle = '#F4F2EC';
+            ctx.font = '900 76px "Noto Sans JP", sans-serif';
+            ctx.fillText('質問ゼロの', W / 2, H / 2 - 120);
+            ctx.fillStyle = '#FF3B1F';
+            ctx.fillText('性格スキャン', W / 2, H / 2 - 10);
+          } else {
+            ctx.fillStyle = '#C6F600';
+            ctx.font = '900 72px "Noto Sans JP", sans-serif';
+            ctx.fillText('0.1秒の迷いは', W / 2, H / 2 - 120);
+            ctx.fillStyle = '#F4F2EC';
+            ctx.fillText('嘘をつかない。', W / 2, H / 2 - 10);
+          }
+          ctx.textAlign = 'left';
+          return;
+        }
+
+        if (t < 16.5) {
+          const cards = [
+            { img: IMAGES.mLanding || IMAGES.landing, tag: '00 // MINDPRINT', line: '質問ゼロ・60秒スキャン', col: '#C6F600' },
+            { img: IMAGES.mForbidden || IMAGES.forbidden, tag: '02 // 禁断のボタン', line: '押すなを7秒耐えろ', col: '#FF3B1F' },
+            { img: IMAGES.freehand, tag: '04 // 1本線聖域', line: '無意識の筆致を解析', col: '#1D4ED8' },
+            { img: IMAGES.mGreed || IMAGES.greed, tag: '05 // 欲望の臨界点', line: '爆発0.2秒前で止めろ', col: '#FF3B1F' },
+            { img: IMAGES.synesthesia, tag: '06 // 音の共感覚', line: '音に合う形を直感造形', col: '#C6F600' },
+          ];
+          const seg = (16.5 - 3.2) / cards.length;
+          const idx = Math.min(cards.length - 1, Math.floor((t - 3.2) / seg));
+          const c = cards[idx];
+          const st = (t - 3.2) - idx * seg;
+          const enter = easeOutCubic(st / 0.3);
+
+          drawDotGrid(ctx, W, H, true, t * 25, 0);
+
+          ctx.fillStyle = c.col;
+          ctx.fillRect(72, 130, 340, 48);
+          ctx.fillStyle = c.col === '#C6F600' ? '#141413' : '#FFFFFF';
+          ctx.font = '800 24px "JetBrains Mono", "Noto Sans JP", sans-serif';
+          ctx.fillText(c.tag, 92, 162);
+
+          ctx.fillStyle = '#F4F2EC';
+          ctx.font = '900 66px "Noto Sans JP", sans-serif';
+          ctx.fillText(c.line, 72, 264);
+
+          drawDeviceMockup(ctx, c.img, 84, 340 + (1 - enter) * 50, 912, 1360, {
+            title: 'MINDPRINT MOBILE LAB',
+            zoom: 1.02 + st * 0.02,
+            topAlign: true,
+            shadowColor: c.col,
+          });
+          return;
+        }
+
+        if (t < 21.5) {
+          drawDotGrid(ctx, W, H, false, 0, t * 20);
+          ctx.textAlign = 'center';
+          ctx.fillStyle = '#FF3B1F';
+          ctx.font = '800 32px "JetBrains Mono", sans-serif';
+          ctx.fillText('CAUGHT IN 4K // SPECIMEN SIGIL', W / 2, 180);
+          ctx.fillStyle = '#141413';
+          ctx.font = '900 62px "Noto Sans JP", sans-serif';
+          ctx.fillText('世界に1つの行動指紋', W / 2, 266);
+          ctx.textAlign = 'left';
+
+          drawProceduralSigil(ctx, W / 2, 650, 260, t, { dark: false });
+          drawDeviceMockup(ctx, IMAGES.mResults || IMAGES.resultsSpec, 84, 960, 912, 820, {
+            title: '1080×1350 SPEC SHEET PNG',
+            topAlign: true,
+            borderColor: '#141413',
+            shadowColor: '#141413',
+          });
+          return;
+        }
+
+        if (t < 25.0) {
+          const lt = t - 21.5;
+          const pct = Math.round(easeOutCubic(clamp(lt / 1.4, 0, 1)) * 92);
+          drawDotGrid(ctx, W, H, true, 0, 0);
+          ctx.textAlign = 'center';
+          ctx.fillStyle = '#C6F600';
+          ctx.font = '800 28px "JetBrains Mono", sans-serif';
+          ctx.fillText('URL BRAINWAVE SYNC', W / 2, 260);
+          ctx.fillStyle = '#F4F2EC';
+          ctx.font = '900 60px "Noto Sans JP", sans-serif';
+          ctx.fillText('友だちと脳波シンクロ', W / 2, 350);
+
+          drawProceduralSigil(ctx, 320, 740, 165, t, { dark: true });
+          drawProceduralSigil(ctx, 760, 740, 165, -t * 0.9, { dark: true, altStroke: true, primaryColor: '#1D4ED8' });
+
+          ctx.fillStyle = '#FF3B1F';
+          ctx.font = '900 180px "Space Grotesk", sans-serif';
+          ctx.fillText(`${pct}%`, W / 2, 1220);
+
+          ctx.fillStyle = '#F4F2EC';
+          ctx.font = '700 36px "Noto Sans JP", sans-serif';
+          ctx.fillText('URLを送るだけで相性解放', W / 2, 1340);
+          ctx.textAlign = 'left';
+          return;
+        }
+
+        // 25.0 - 28.0s Vertical CTA
+        drawDotGrid(ctx, W, H, true, 0, 0);
+        ctx.globalAlpha = 0.25;
+        drawProceduralSigil(ctx, W / 2, H / 2, 390, t, { dark: true });
+        ctx.globalAlpha = 1;
+
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#FF3B1F';
+        ctx.font = '900 116px "Space Grotesk", sans-serif';
+        ctx.fillText('MINDPRINT', W / 2, 760);
+
+        ctx.fillStyle = '#F4F2EC';
+        ctx.font = '900 54px "Noto Sans JP", sans-serif';
+        ctx.fillText('60秒で本性を試せ', W / 2, 870);
+
+        ctx.fillStyle = '#C6F600';
+        ctx.fillRect(90, 980, W - 180, 106);
+        ctx.fillStyle = '#141413';
+        ctx.font = '800 30px "JetBrains Mono", monospace';
+        ctx.fillText('プロフ / 固定コメントのURLから無料', W / 2, 1046);
+        ctx.textAlign = 'left';
+      }
+
+      window.__initTrailer = async () => {
+        await document.fonts.ready;
+        await Promise.all([
+          loadImage('landing', '/captures/00_landing.png'),
+          loadImage('chrono', '/captures/01_chrono.png'),
+          loadImage('forbidden', '/captures/02_forbidden.png'),
+          loadImage('crooked', '/captures/03_crooked.png'),
+          loadImage('freehand', '/captures/04_freehand.png'),
+          loadImage('greed', '/captures/05_greed.png'),
+          loadImage('synesthesia', '/captures/06_synesthesia.png'),
+          loadImage('resultsSpec', '/captures/07_results_spec.png'),
+          loadImage('resultsSync', '/captures/08_results_sync.png'),
+          loadImage('mLanding', '/captures/m_landing.png'),
+          loadImage('mForbidden', '/captures/m_forbidden.png'),
+          loadImage('mGreed', '/captures/m_greed.png'),
+          loadImage('mResults', '/captures/m_results.png'),
+        ]);
+      };
+
+      window.__renderFrame = (timeSec, mode) => {
+        const canvas = document.getElementById('stage');
+        const W = mode === 'shorts' ? 1080 : 1920;
+        const H = mode === 'shorts' ? 1920 : 1080;
+        if (canvas.width !== W || canvas.height !== H) {
+          canvas.width = W;
+          canvas.height = H;
+        }
+        const ctx = canvas.getContext('2d');
+        if (mode === 'shorts') {
+          renderShortsFrame(ctx, W, H, timeSec);
+        } else {
+          renderYouTubeFrame(ctx, W, H, timeSec);
+        }
+        return canvas.toDataURL('image/jpeg', 0.93);
+      };
+    </script>
+  </body>
+</html>
