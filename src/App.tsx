@@ -19,6 +19,7 @@ import { computeFingerprintHash, scoreTelemetry } from './engine/scoring';
 import { classifyArchetype, generateEvidence } from './engine/archetypes';
 import { decodeSharePayload } from './engine/shareCodec';
 import { SoundEngine } from './engine/sound';
+import { trackEvent } from './engine/analytics';
 import { HeaderBar } from './components/HeaderBar';
 import { LandingView } from './components/LandingView';
 import { ModuleTransition } from './components/ModuleTransition';
@@ -86,6 +87,7 @@ export function App() {
       const decoded = decodeSharePayload(code);
       if (decoded) {
         setIncomingTarget(decoded);
+        trackEvent('sync_invite_landed', { target_archetype_index: decoded.a });
       }
     }
     return () => {
@@ -126,6 +128,10 @@ export function App() {
     setRunConfig(cfg);
     telemetryRef.current = {};
     setReport(null);
+    trackEvent('scan_start', {
+      mode,
+      has_sync_target: Boolean(incomingTarget),
+    });
     startTransitionToModule(0);
   };
 
@@ -151,6 +157,14 @@ export function App() {
     const archetype = classifyArchetype(axes, raw);
     const evidence = generateEvidence(raw, locale);
     const fingerprintHash = computeFingerprintHash(axes, raw);
+
+    trackEvent('scan_complete', {
+      archetype_id: archetype.id,
+      mode: runConfig.mode,
+      forbidden_pressed: raw.forbidden.pressed,
+      greed_exploded: raw.greed.exploded,
+      has_sync_target: Boolean(incomingTarget),
+    });
 
     const builtReport: MindprintReport = {
       id: `${Date.now()}-${fingerprintHash}`,
@@ -270,6 +284,7 @@ export function App() {
             config={runConfig}
             onComplete={(res) => {
               telemetryRef.current.chrono = res;
+              trackEvent('module_complete', { module_index: 1, module_name: 'chrono' });
               startTransitionToModule(1);
             }}
           />
@@ -280,6 +295,7 @@ export function App() {
             locale={locale}
             onComplete={(res) => {
               telemetryRef.current.forbidden = res;
+              trackEvent('module_complete', { module_index: 2, module_name: 'forbidden' });
               startTransitionToModule(2);
             }}
           />
@@ -291,6 +307,7 @@ export function App() {
             config={runConfig}
             onComplete={(res) => {
               telemetryRef.current.crooked = res;
+              trackEvent('module_complete', { module_index: 3, module_name: 'crooked' });
               startTransitionToModule(3);
             }}
           />
@@ -301,6 +318,7 @@ export function App() {
             locale={locale}
             onComplete={(res) => {
               telemetryRef.current.freehand = res;
+              trackEvent('module_complete', { module_index: 4, module_name: 'freehand' });
               startTransitionToModule(4);
             }}
           />
@@ -312,6 +330,7 @@ export function App() {
             config={runConfig}
             onComplete={(res) => {
               telemetryRef.current.greed = res;
+              trackEvent('module_complete', { module_index: 5, module_name: 'greed' });
               startTransitionToModule(5);
             }}
           />
@@ -323,6 +342,7 @@ export function App() {
             muted={muted}
             onComplete={(res) => {
               telemetryRef.current.synesthesia = res;
+              trackEvent('module_complete', { module_index: 6, module_name: 'synesthesia' });
               finalizeScan(res);
             }}
           />

@@ -25,6 +25,7 @@ import {
   reportToSigilData,
 } from '../engine/sigilCanvas';
 import { exportDualSyncCardPng, exportSoloSpecCardPng } from '../engine/specCardExporter';
+import { trackEvent } from '../engine/analytics';
 import { RadarChart } from './RadarChart';
 import { TelemetryReplay } from './TelemetryReplay';
 
@@ -128,6 +129,7 @@ export function ResultsView({ report, syncTarget, locale, onRetake }: ResultsVie
     setExporting(true);
     try {
       await exportSoloSpecCardPng(report, cardTheme, locale, true);
+      trackEvent('spec_png_download', { kind: 'solo', theme: cardTheme });
     } finally {
       setExporting(false);
     }
@@ -138,6 +140,7 @@ export function ResultsView({ report, syncTarget, locale, onRetake }: ResultsVie
     setExporting(true);
     try {
       await exportDualSyncCardPng(report, syncTarget, compatibility, cardTheme, locale, true);
+      trackEvent('spec_png_download', { kind: 'dual', theme: cardTheme });
     } finally {
       setExporting(false);
     }
@@ -154,11 +157,13 @@ export function ResultsView({ report, syncTarget, locale, onRetake }: ResultsVie
       document.execCommand('copy');
       document.body.removeChild(area);
     }
+    trackEvent('share_action', { channel: 'copy_link', archetype_id: report.archetype.id });
     setCopied(true);
     window.setTimeout(() => setCopied(false), 2200);
   };
 
   const handleTweetSolo = () => {
+    trackEvent('share_action', { channel: 'x_solo', archetype_id: report.archetype.id });
     const topEvidence = report.evidence[0]?.metric ?? '';
     const text =
       locale === 'ja'
@@ -172,6 +177,7 @@ export function ResultsView({ report, syncTarget, locale, onRetake }: ResultsVie
 
   const handleTweetSync = () => {
     if (!compatibility || !syncTarget || !targetArch) return;
+    trackEvent('share_action', { channel: 'x_sync', sync_score: compatibility.syncScore });
     const friendName = syncTarget.n.trim() || t.results.anonymous;
     const text =
       locale === 'ja'

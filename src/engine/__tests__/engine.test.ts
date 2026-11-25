@@ -10,6 +10,7 @@ import {
   resampleStroke,
 } from '../shareCodec';
 import { computeCompatibility } from '../compatibility';
+import { getGaMeasurementId, initAnalytics, trackEvent } from '../analytics';
 
 function makeBaseTelemetry(overrides: Partial<RawTelemetry> = {}): RawTelemetry {
   return {
@@ -460,5 +461,17 @@ describe('shareCodec & compatibility', () => {
     }
 
     expect(seen.size).toBe(16);
+  });
+});
+
+describe('analytics', () => {
+  it('validates GA4 measurement IDs cleanly and degrades safely when unconfigured', () => {
+    expect(getGaMeasurementId(' g-abc1234567 ')).toBe('G-ABC1234567');
+    expect(getGaMeasurementId('G-XXXXXXXXXX')).toBeNull();
+    expect(getGaMeasurementId('')).toBeNull();
+    expect(getGaMeasurementId('UA-12345-1')).toBeNull();
+
+    expect(initAnalytics(null)).toBe(false);
+    expect(() => trackEvent('scan_start', { mode: 'daily' })).not.toThrow();
   });
 });
